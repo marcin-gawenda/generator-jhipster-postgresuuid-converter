@@ -13,7 +13,7 @@ util.inherits(JhipsterGenerator, BaseGenerator);
 module.exports = JhipsterGenerator.extend({
     initializing: {
         readConfig() {
-            this.jhipsterAppConfig = this.getJhipsterAppConfig();
+            this.jhipsterAppConfig = this.getAllJhipsterConfig();
             if (!this.jhipsterAppConfig) {
                 this.error('Can\'t read .yo-rc.json');
             }
@@ -24,7 +24,7 @@ module.exports = JhipsterGenerator.extend({
             this.printJHipsterLogo();
 
             // Have Yeoman greet the user.
-            this.log(`\nWelcome to the ${chalk.bold.yellow('JHipster postgresuuid-converter')} generator! ${chalk.yellow(`v${packagejs.version}\n`)}`);
+            this.log(`\nWelcome to the ${chalk.bold.yellow(packagejs.description)} generator! ${chalk.yellow(`v${packagejs.version}\n`)}`);
         },
         checkJhipster() {
             const jhipsterVersion = this.jhipsterAppConfig.jhipsterVersion;
@@ -133,13 +133,16 @@ module.exports = JhipsterGenerator.extend({
         this.replaceContent(`${javaDir}service/mapper/UserMapper.java`, 'import java.util.Set;', 'import java.util.Set;\nimport java.util.UUID;');
         this.longToUUID(`${javaDir}service/mapper/UserMapper.java`);
 
-        this.longToUUID(`${javaDir}service/UserService.java`);
+        // this.longToUUID(`${javaDir}service/UserService.java`);
 
         // Tests
         this.longToUUID(`${javaTestDir}web/rest/UserResourceIntTest.java`);
         this.importUUID(`${javaTestDir}web/rest/UserResourceIntTest.java`, 'import java.util.List;');
         this.replaceContent(`${javaTestDir}web/rest/UserResourceIntTest.java`, '1L', 'UUID.fromString("00000000-0000-0000-0000-000000000001")', true);
         this.replaceContent(`${javaTestDir}web/rest/UserResourceIntTest.java`, '2L', 'UUID.fromString("00000000-0000-0000-0000-000000000002")', true);
+        this.importUUID(`${javaTestDir}web/rest/AuditResourceIntTest.java`, 'import java.time.Instant;');
+        this.replaceContent(`${javaTestDir}web/rest/AuditResourceIntTest.java`, '1L', 'UUID.fromString("00000000-0000-0000-0000-000000000001")', true);
+        this.replaceContent(`${javaTestDir}web/rest/AuditResourceIntTest.java`, '2L', 'UUID.fromString("00000000-0000-0000-0000-000000000002")', true);
 
         const file = glob.sync('src/main/resources/config/liquibase/changelog/*initial_schema.xml')[0];
         this.replaceContent(file, 'type="bigint"', 'type="uuid"', true);

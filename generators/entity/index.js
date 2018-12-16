@@ -15,14 +15,14 @@ util.inherits(JhipsterGenerator, BaseGenerator);
 module.exports = JhipsterGenerator.extend({
     initializing: {
         readConfig() {
-            this.jhipsterAppConfig = this.getJhipsterAppConfig();
+            this.jhipsterAppConfig = this.getAllJhipsterConfig();
             if (!this.jhipsterAppConfig) {
                 this.error('Can\'t read .yo-rc.json');
             }
             this.entityConfig = this.options.entityConfig;
         },
         displayLogo() {
-            this.log(chalk.white(`Running ${chalk.bold('JHipster postgresuuid-converter')} Generator! ${chalk.yellow(`v${packagejs.version}\n`)}`));
+            this.log(chalk.white(`Running ${chalk.bold(packagejs.description)} Generator! ${chalk.yellow(`v${packagejs.version}\n`)}`));
         },
         validate() {
             // this shouldn't be run directly
@@ -34,7 +34,7 @@ module.exports = JhipsterGenerator.extend({
 
     prompting() {
         // don't prompt if data are imported from a file
-        if (this.entityConfig.useConfigurationFile == true && this.entityConfig.data && typeof this.entityConfig.data.yourOptionKey !== 'undefined') {
+        if (this.entityConfig.useConfigurationFile === true && this.entityConfig.data && typeof this.entityConfig.data.yourOptionKey !== 'undefined') {
             this.yourOptionKey = this.entityConfig.data.yourOptionKey;
             return;
         }
@@ -75,29 +75,96 @@ module.exports = JhipsterGenerator.extend({
             const uuidGeneratorAnnotation = '@GeneratedValue.*"UUIDGenerator"';
             const pattern = new RegExp(uuidGeneratorAnnotation, 'g');
 
+            const entityJson = this.fs.readJSON(`${process.cwd()}/.jhipster/${entityName}.json`);
+            const preserveLongIdRegExp = new RegExp('@puc.preserveLongId', 'g');
+            const preserveLongId = preserveLongIdRegExp.test(entityJson.javadoc);
+
             const content = this.fs.read(`${javaDir}domain/${entityName}.java`, 'utf8');
 
+            this.log(`\n${chalk.bold.green(packagejs.description)} ${chalk.green('updating the entity ')}${chalk.bold.yellow(entityName)}`);
+
+            let f;
             if (!pattern.test(content)) {
+                // if (preserveLongIdRegExp.test(entityJson.javadoc)) {
+                //     this.log(`${chalk.bold.yellow('Type Long preserved for entity')} ${chalk.bold.yellow(entityName)}`);
+                //     return;
+                // }
                 // We need to convert this entity
 
+                // const preserveFieldsRegExp = /(?:.*?\s)@ch.preserveLongTypesOn (.*)(?:\s|$)/g;
+                // const preserveFieldsMatch = preserveFieldsRegExp.exec(entityJson.javadoc);
+                //
+                // const preserveFields = []; // preserveFieldsMatch[1].split(/,\s/);
+                // this.log(`${chalk.yellow('DEBUG')} Type Long will be preserved for fields: ${preserveFields}\n`);
+                //
+                // const replaceFields = entityJson.fields
+                //     .filter(f => f.fieldType === 'Long' && f.fieldName.toLowerCase().indexOf('id') > 0 &&
+                //         !preserveFields.some(p => p === f.fieldName));
+                // this.log(`${chalk.green('DEBUG')} Type Long will be replaced with UUID for fields: ${replaceFields}\n`);
+                //
+                // if (replaceFields.length === 0) {
+                //     this.log(`${chalk.green('DEBUG')} Nothing to convert for this entity\n`);
+                //     return;
+                // }
+
+                // replaceFields.forEach(f => {
+                //    switch (f) {
+                //        case 'id':
+                //            break;
+                //        default:
+                //    }
+                // }
+
+                const convertForRelations = [];
+                entityJson.relationships.forEach((rel) => {
+                    if (rel.otherEntityField === 'id' || rel.relationshipType === 'one-to-many') {
+                        const upperOtherEntityName = rel.otherEntityName.charAt(0).toUpperCase() + rel.otherEntityName.slice(1);
+                        // this.log(`${chalk.yellow('DEBUG')} upperOtherEntityName: ${upperOtherEntityName}\n`);
+                        const otherEntityNameJson = this.fs.readJSON(`${process.cwd()}/.jhipster/${upperOtherEntityName}.json`);
+                        // this.log(`${chalk.yellow('DEBUG')} otherEntityNameJson: ${JSON.stringify(otherEntityNameJson,null,'\t')}\n`);
+                        // if (!preserveLongIdRegExp.test(otherEntityNameJson.javadoc)) { // returning true for first rel
+                        if (!new RegExp('@puc.preserveLongId', 'g').test(otherEntityNameJson.javadoc)) {
+                            convertForRelations.push(rel);
+                            // this.log(`${chalk.yellow('DEBUG')} convertForRelation: ${JSON.stringify(rel, null, '\t')}\n`);
+                        }
+                    }
+                });
+
                 // JAVA
-                this.convertIDtoUUIDForColumn(`${javaDir}domain/${entityName}.java`, 'import java.util.Objects;', 'id');
+                // Domain
+                if (preserveLongId) {
+                    this.log(`${chalk.bold.yellow('Type Long has been preserved for id field')}`);
+                } else {
+                    this.convertIdField(`${javaDir}domain/${entityName}.java`);
+                }
 
                 // DTO
-                if (fs.existsSync(`${javaDir}service/dto/${entityName}DTO.java`)) {
-                    this.importUUID(`${javaDir}service/dto/${entityName}DTO.java`, 'import java.util.Objects;');
-                    this.longToUUID(`${javaDir}service/dto/${entityName}DTO.java`);
+                f = `${javaDir}service/dto/${entityName}DTO.java`;
+                if (fs.existsSync(f)) {
+                    if (!preserveLongId || convertForRelations.length > 0) {
+                        this.importUUID(f, 'import java.util.Objects;');
+                    }
+                    if (!preserveLongId) {
+                        this.convertLongToUUIDForIdField(f);
+                    }
+                    convertForRelations.forEach((rel) => {
+                        this.convertFromTypeToTypeForRelation(f, 'Long', 'UUID', rel.relationshipName, rel.otherEntityName);
+                    });
                 }
 
                 // Mapper
-                if (fs.existsSync(`${javaDir}service/mapper/${entityName}Mapper.java`)) {
-                    this.importUUID(`${javaDir}service/mapper/${entityName}Mapper.java`, 'import org.mapstruct.*;');
-                    this.longToUUID(`${javaDir}service/mapper/${entityName}Mapper.java`);
+                f = `${javaDir}service/mapper/${entityName}Mapper.java`;
+                if (fs.existsSync(f) && !preserveLongId) {
+                    this.importUUID(f, 'import org.mapstruct.*;');
+                    this.longToUUID(f);
                 }
 
                 // And the Repository
-                this.importUUID(`${javaDir}repository/${entityName}Repository.java`, 'import org.springframework.data.jpa.repository.*;');
-                this.longToUUID(`${javaDir}repository/${entityName}Repository.java`);
+                if (!preserveLongId) {
+                    f = `${javaDir}repository/${entityName}Repository.java`;
+                    this.importUUID(f, 'import org.springframework.data.jpa.repository.*;');
+                    this.convertLongToUUID(f);
+                }
 
                 // The Search Repository
                 if (fs.existsSync(`${javaDir}repository/search/${entityName}SearchRepository.java`)) {
@@ -106,52 +173,86 @@ module.exports = JhipsterGenerator.extend({
                 }
 
                 // Service
-                if (fs.existsSync(`${javaDir}service/${entityName}Service.java`)) {
-                    this.importUUID(`${javaDir}service/${entityName}Service.java`, 'import org.slf4j.LoggerFactory;');
-                    this.longToUUID(`${javaDir}service/${entityName}Service.java`);
+                f = `${javaDir}service/${entityName}Service.java`;
+                if (fs.existsSync(f) && !preserveLongId) {
+                    this.importUUID(f, 'import java.util.Optional;');
+                    this.longToUUID(f);
                 }
 
                 // ServiceImp
-                if (fs.existsSync(`${javaDir}service/impl/${entityName}ServiceImpl.java`)) {
-                    this.importUUID(`${javaDir}service/impl/${entityName}ServiceImpl.java`, 'import org.slf4j.LoggerFactory;');
-                    this.longToUUID(`${javaDir}service/impl/${entityName}ServiceImpl.java`);
+                f = `${javaDir}service/impl/${entityName}ServiceImpl.java`;
+                if (fs.existsSync(f) && !preserveLongId) {
+                    this.importUUID(f, 'import java.util.Optional;');
+                    this.convertLongToUUID(f);
+                }
+
+                // Criteria
+                f = `${javaDir}service/dto/${entityName}Criteria.java`;
+                if (fs.existsSync(f)) {
+                    if (!preserveLongId) {
+                        this.convertLongFilterToFilterForIdField(f);
+                    }
+                    convertForRelations.forEach((rel) => {
+                        this.convertFromTypeToTypeForRelation(f, 'LongFilter', 'Filter', rel.relationshipName, rel.otherEntityName);
+                    });
                 }
 
                 // Resource
-                this.importUUID(`${javaDir}web/rest/${entityName}Resource.java`);
-                this.longToUUID(`${javaDir}web/rest/${entityName}Resource.java`);
+                if (!preserveLongId) {
+                    f = `${javaDir}web/rest/${entityName}Resource.java`;
+                    this.importUUID(f);
+                    this.convertLongToUUIDForIdField(f);
+                }
 
                 // JavaScript
                 const entityNameSpinalCased = _s.dasherize(_s.decapitalize(entityName));
                 const stateFile = glob.sync(`${this.webappDir}../webapp/app/entities/${entityNameSpinalCased}/${entityNameSpinalCased}*.state.js`)[0];
-                this.replaceContent(stateFile, '\{id\:int\}', '{id:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}}', true);
+                // TODO reimplement
+                // this.replaceContent(stateFile, '\{id\:int\}', '{id:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}}', true);
 
-                // Liquidbase
+                this.log(`${chalk.red('DEBUG')} Updating entity ${entityName} 3.3 ...\n`);
+
+                // Liquibase
+                // f = `src/main/resources/config/liquibase/changelog/entity_${entityName}.xml`;
                 const file = glob.sync(`src/main/resources/config/liquibase/changelog/*entity_${entityName}.xml`)[0];
-                this.replaceContent(file, 'type="bigint"', 'type="uuid"', true);
-                this.replaceContent(file, 'autoIncrement="\\$\\{autoIncrement\\}"', '', true);
+                if (!preserveLongId) {
+                    this.replaceContent(file, 'name="id" type="bigint" autoIncrement="\\$\\{autoIncrement\\}"', 'name="id" type="uuid"', true);
+                    // this.replaceContent(f, 'autoIncrement="\\$\\{autoIncrement\\}"', '', true);
+                }
+
+                convertForRelations.forEach((rel) => {
+                    this.convertInLiquibaseForRelation(file, rel.relationshipName);
+                });
 
                 // Test
-                // Handle the question of life check
-                this.replaceContent(`${javaTestDir}/web/rest/${entityName}ResourceIntTest.java`, '(42L|42)', 'UUID.fromString("00000000-0000-0000-0000-000000000042")', true);
-                this.importUUID(`${javaTestDir}/web/rest/${entityName}ResourceIntTest.java`, 'import java.util.List;');
-                this.longToUUID(`${javaTestDir}/web/rest/${entityName}ResourceIntTest.java`);
-                this.replaceContent(`${javaTestDir}/web/rest/${entityName}ResourceIntTest.java`, '1L', 'UUID.fromString("00000000-0000-0000-0000-000000000001")', true);
-                this.replaceContent(`${javaTestDir}/web/rest/${entityName}ResourceIntTest.java`, '2L', 'UUID.fromString("00000000-0000-0000-0000-000000000002")', true);
-                this.replaceContent(`${javaTestDir}/web/rest/${entityName}ResourceIntTest.java`, 'getId\\(\\)\\.intValue\\(\\)', 'getId().toString()', true);
-                this.replaceContent(`${javaTestDir}/web/rest/${entityName}ResourceIntTest.java`, '\\.intValue\\(\\)', '.toString()', true);
-                this.replaceContent(`${javaTestDir}/web/rest/${entityName}ResourceIntTest.java`, 'MAX_VALUE', 'randomUUID()', true);
+                // ResourceIntTest
+                f = `${javaTestDir}/web/rest/${entityName}ResourceIntTest.java`;
+                if (!preserveLongId || convertForRelations.length > 0) {
+                    this.importUUID(f, 'import java.util.List;');
+                }
+
+                if (!preserveLongId) {
+                    // Handle the question of life check
+                    this.replaceContent(f, '(42L|42)', 'UUID.fromString("00000000-0000-0000-0000-000000000042")', true);
+                    this.replaceContent(f, 'setId\\(1L\\)', 'setId(UUID.fromString("00000000-0000-0000-0000-000000000001"))', true);
+                    this.replaceContent(f, 'setId\\(2L\\)', 'setId(UUID.fromString("00000000-0000-0000-0000-000000000002"))', true);
+                    this.replaceContent(f, 'getId\\(\\)\\.intValue\\(\\)', 'getId().toString()', true);
+                    this.replaceContent(f, '\\.intValue\\(\\)', '.toString()', true);
+                    this.replaceContent(f, 'Long.MAX_VALUE', 'UUID.randomUUID()', true);
+                    // this.replaceContent(f, 'getId\\(\\);', 'getId().toString();', true);
+                }
+
+                convertForRelations.forEach((rel) => {
+                    this.convertFromTypeToTypeForRelation(f, 'Long', 'UUID', rel.relationshipName, rel.otherEntityName);
+                    this.convertShouldNotBeFoundForRelation(f, rel.relationshipName);
+                });
             }
         },
 
         writeFiles() {
             // function to use directly template
             this.template = function (source, destination) {
-                fs.copyTpl(
-                    this.templatePath(source),
-                    this.destinationPath(destination),
-                    this
-                );
+                fs.copyTpl(this.templatePath(source), this.destinationPath(destination), this);
             };
         },
 

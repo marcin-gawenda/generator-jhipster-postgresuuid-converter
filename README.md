@@ -9,6 +9,8 @@ to be used in a JHipster application. The purpose of this module is to
 convert a **monolithic JHipster application** using `Long` primary keys
 to `UUID` based primary keys.
 
+//TODO redesign
+
 It is important to note that since we don't know what relations may exist,
 the module converts all Long members of Entity classes. You might need to
 do some manual adjustments to converted code. 
