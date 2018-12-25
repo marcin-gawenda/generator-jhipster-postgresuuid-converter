@@ -10,3 +10,4 @@ test/temp/
 npm-debug.log
 *debug.log*
 .vscode
+/*.tgz

@@ -117,7 +117,7 @@ module.exports = JhipsterGenerator.extend({
 
                 const convertForRelations = [];
                 entityJson.relationships.forEach((rel) => {
-                    if (rel.otherEntityField === 'id' || rel.relationshipType === 'one-to-many') {
+                    if (rel.otherEntityField === 'id' || rel.relationshipType === 'one-to-many' || rel.relationshipType === 'one-to-one') {
                         const upperOtherEntityName = rel.otherEntityName.charAt(0).toUpperCase() + rel.otherEntityName.slice(1);
                         // this.log(`${chalk.yellow('DEBUG')} upperOtherEntityName: ${upperOtherEntityName}\n`);
                         const otherEntityNameJson = this.fs.readJSON(`${process.cwd()}/.jhipster/${upperOtherEntityName}.json`);
