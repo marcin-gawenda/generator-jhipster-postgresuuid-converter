@@ -226,7 +226,8 @@ module.exports = JhipsterGenerator.extend({
 
                 // Test
                 // ResourceIntTest
-                f = `${javaTestDir}/web/rest/${entityName}ResourceIntTest.java`;
+                // f = `${javaTestDir}/web/rest/${entityName}ResourceIntTest.java`; // till JH 6.3.1
+                f = `${javaTestDir}/web/rest/${entityName}ResourceIT.java`;
                 if (!preserveLongId || convertForRelations.length > 0) {
                     this.importUUID(f, 'import java.util.List;');
                 }

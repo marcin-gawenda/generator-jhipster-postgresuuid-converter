@@ -36,7 +36,7 @@ module.exports = class extends BaseGenerator {
     }
 
     convertIdField(file) {
-        this.importUUID(file, 'import java.util.Objects;');
+        this.importUUID(file, '.domain;');
         this.replaceContent(file, '@GeneratedValue.*', '@GeneratedValue', true);
         this.replaceContent(file, '.*@SequenceGenerator.*\n', '', true);
         this.replaceContent(file, 'Long id', 'UUID id', true);
